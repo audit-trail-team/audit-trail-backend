@@ -5,6 +5,6 @@ curl --request POST \
   "EvidenceUserID": "marvinator", 
   "PdfDocumentBase64": "mydocs", 
   "Customer": "marv", 
-  "Timestamp": 1713019181, 
+  "Timestamp": "2024-04-08 13:22:17", 
   "SigType": 3
 }'
