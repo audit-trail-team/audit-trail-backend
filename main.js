@@ -7,6 +7,8 @@ const lib = require("./web3i");
 //config files
 const abiWrapper = require('./abi.json');
 
+const { readJsonFiles, clearDirectory, writeFileToDirectory } = require('./read_failed_audit_logs');
+
 // Crypto
 const [encrypt, decrypt, sha256] = require('./encrypt_decrypt_hash');
 
@@ -31,6 +33,10 @@ function serverError() {
         status: 500,
         message: 'server error'
     }
+}
+
+function parseTimestamp(timestamp) {
+    return new Date(timestamp + " UTC").getTime() / 1000 // return UTC timestamp in seconds from 'YYYY-MM-DD HH:MM::SS'
 }
 
 async function resolveBody(req, body) {
@@ -100,7 +106,7 @@ async function resolveBody(req, body) {
                 encrypt(jsonbody["EvidenceUserID"], Number(currentLogCount)),
                 sha256(jsonbody["PdfDocumentBase64"]),
                 jsonbody["Customer"],
-                jsonbody["Timestamp"],
+                parseTimestamp(jsonbody["Timestamp"]),
                 jsonbody["SigType"]
             ]
             const contractResponse = await lib.contr_addAuditLog(
@@ -123,7 +129,7 @@ async function resolveBody(req, body) {
     else if (req.method === "POST" && req.url.endsWith("/create-audit-logs")) {
         json_response = serverError()
         try {
-            for (auditLog in jsonbody["auditLogs"]) {
+            for (const auditLog of jsonbody["auditLogs"]) {
                 if (jsonbody["EvidenceUserID"] === undefined || jsonbody["EvidenceUserID"] instanceof string === false ||
                     jsonbody["PdfDocumentBase64"] === undefined || jsonbody["PdfDocumentBase64"] instanceof string === false ||
                     jsonbody["Customer"] === undefined || jsonbody["Customer"] instanceof string === false ||
@@ -145,11 +151,11 @@ async function resolveBody(req, body) {
             fieldCustomers = []
             fieldTimestamps = []
             fieldSigTypes = []
-            for (auditLog in jsonbody["auditLogs"]) {
+            for (const auditLog of jsonbody["auditLogs"]) {
                 fieldUserIds.push(encrypt(auditLog["EvidenceUserID"], currentLogCount))
                 fieldDocumentHashes.push(sha256(auditLog["PdfDocumentBase64"]))
                 fieldCustomers.push(auditLog["Customer"])
-                fieldTimestamps.push(auditLog["Timestamp"])
+                fieldTimestamps.push(parseTimestamp(auditLog["Timestamp"]))
                 fieldSigTypes.push(auditLog["SigType"])
                 currentLogCount += 1
             }
@@ -211,6 +217,54 @@ async function resolveBody(req, body) {
 
     return json_response
 }
+
+
+
+
+async function retryFailedAuditLogs() {
+    try {
+
+        const jsonData = await readJsonFiles();
+        let currentLogCount = await lib.contr_getAuditLogsCount(
+            providerUrl,
+            contractAddress,
+            contractAbi
+        )
+
+        for (const json of jsonData) {
+            jsonbody = json["json"]
+            fields = [
+                encrypt(jsonbody["EvidenceUserID"], Number(currentLogCount)),
+                sha256(jsonbody["PdfDocumentBase64"]),
+                jsonbody["Customer"],
+                parseTimestamp(jsonbody["Timestamp"]),
+                jsonbody["SigType"]
+            ]
+            console.log(fields)
+            const contractResponse = await lib.contr_addAuditLog(
+                providerUrl,
+                contractAddress,
+                contractAbi,
+                fields   //["_userNameEncrypted", "_documentHash", _timeStamp, _sigType]
+            )
+            console.log(contractResponse)
+            currentLogCount += 1
+        }
+
+        // remove all files from failed dir
+        await clearDirectory()
+
+        // write to success dir
+        for (const json of jsonData) {
+            await writeFileToDirectory(json["file_name"], JSON.stringify(json["json"]))
+        }
+
+    } catch (error) {
+        console.error('Failed to read JSON files:', error);
+    }
+}
+
+retryFailedAuditLogs();
 
 
 http.createServer(function (req, res) {
