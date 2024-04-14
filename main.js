@@ -21,7 +21,7 @@ require("dotenv").config();
 
 // Global constants
 const serverDomain = "127.0.0.1";
-const serverPort = 3000;
+const serverPort = 3001;
 
 // Global variables
 let providerUrl = process.env.PROVIDER_URL;
