@@ -121,6 +121,8 @@ async function resolveBody(req, body) {
         parseTimestamp(jsonbody["Timestamp"]),
         jsonbody["SigType"],
       ];
+      console.log("adding audit log")
+      console.log(fields)
       const contractResponse = await lib.contr_addAuditLog(
         providerUrl,
         contractAddress,
@@ -184,6 +186,8 @@ async function resolveBody(req, body) {
         fieldTimestamps,
         fieldSigTypes,
       ];
+      console.log("adding audit log")
+      console.log(fields)
       const contractResponse = await lib.contr_addAuditLog(
         providerUrl,
         contractAddress,
