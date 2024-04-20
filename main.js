@@ -114,11 +114,12 @@ async function resolveBody(req, body) {
         contractAddress,
         contractAbi
       );
+
       fields = [
         encrypt(jsonbody["EvidenceUserID"], Number(currentLogCount)),
         sha256(jsonbody["PdfDocumentBase64"]),
         jsonbody["Customer"],
-        parseTimestamp(jsonbody["Timestamp"]),
+        jsonbody["Timestamp"].replaceAll('"', ''),
         jsonbody["SigType"],
       ];
       console.log("adding audit log")
