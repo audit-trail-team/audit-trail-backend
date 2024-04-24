@@ -1,5 +1,5 @@
 curl --request POST \
-  --url http://localhost:3001/create-audit-log \
+  --url http://localhost:3001/create-cached-audit-logs \
   --header 'Content-Type: application/json' \
   --data '{
   "EvidenceUserID": "marvinator", 

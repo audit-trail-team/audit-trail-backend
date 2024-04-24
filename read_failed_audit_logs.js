@@ -8,15 +8,16 @@ const path = require("path");
 const failedDirectoryPath = process.env.FAILED_REQUESTS_DIRECTORY;
 const successDirectoryPath = process.env.SUCCESS_REQUESTS_DIRECTORY;
 
-async function readJsonFiles() {
+async function readJsonFiles(directoryPath) {
   let dataArray = [];
 
   try {
-    const files = await fs.readdir(failedDirectoryPath);
+    const files = await fs.readdir(directoryPath);
+    console.log(files);
     for (let file of files) {
       if (path.extname(file) === ".json") {
         const data = await fs.readFile(
-          path.join(failedDirectoryPath, file),
+          path.join(directoryPath, file),
           "utf8"
         );
         json = {
@@ -34,11 +35,11 @@ async function readJsonFiles() {
   return dataArray;
 }
 
-async function clearDirectory() {
+async function clearDirectory(directoryPath) {
   try {
-    const files = await fs.readdir(failedDirectoryPath);
+    const files = await fs.readdir(directoryPath);
     for (let file of files) {
-      const filePath = path.join(failedDirectoryPath, file);
+      const filePath = path.join(directoryPath, file);
       fs.unlink(filePath, (err) => {
         if (err) {
           console.error("Failed to delete file:", err);
@@ -72,8 +73,8 @@ async function clearDirectory() {
   //   });
 }
 
-async function writeFileToDirectory(fileName, content) {
-  const filePath = path.join(successDirectoryPath, fileName);
+async function writeFileToDirectory(fileName, content, directoryPath) {
+  const filePath = path.join(directoryPath, fileName);
 
   try {
     await fs.writeFile(filePath, content);

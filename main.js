@@ -91,6 +91,112 @@ async function resolveBody(req, body) {
     } catch (err) {
       logWithTime(err);
     }
+  } else if (req.method === "POST" && req.url.endsWith("/create-cached-audit-logs")) {
+    json_response = serverError();
+    try {
+      if (
+        jsonbody["EvidenceUserID"] === undefined ||
+        jsonbody["PdfDocumentBase64"] === undefined ||
+        jsonbody["Customer"] === undefined ||
+        jsonbody["Timestamp"] === undefined ||
+        jsonbody["SigType"] === undefined ||
+        jsonbody["SigType"] < 0 ||
+        jsonbody["SigType"] > 4
+      ) {
+        return {
+          status: 400,
+          message:
+            "missing required fields or incorrect type: EvidenceUserID, PdfDocumentBase64, Customer, Timestamp, SigType",
+        };
+      }
+      // get number of files in cache dir CACHE_REQUESTS_DIRECTORY
+      // if 15 then we should create all audit logs including new one,
+      // else write to file in cache reqeusts directory
+      const storedJson = await readJsonFiles(process.env.CACHE_REQUESTS_DIRECTORY);
+      if (storedJson.length >= 15) {
+        let currentLogCount = Number(await lib.contr_getAuditLogsCount(
+          providerUrl,
+          contractAddress,
+          contractAbi
+        ));
+        fieldUserIds = [];
+        fieldDocumentHashes = [];
+        fieldCustomers = [];
+        fieldTimestamps = [];
+        fieldSigTypes = [];
+
+        // add cached logs
+        for (const jsonData of storedJson) {
+          console.log(jsonData)
+          const auditLog = jsonData["json"]
+          fieldUserIds.push(encrypt(auditLog["EvidenceUserID"], currentLogCount));
+          fieldDocumentHashes.push(sha256(auditLog["PdfDocumentBase64"]));
+          fieldCustomers.push(auditLog["Customer"]);
+          fieldTimestamps.push(parseTimestamp(auditLog["Timestamp"]));
+          fieldSigTypes.push(auditLog["SigType"]);
+          currentLogCount += 1;
+        }
+
+        // add latest audit log
+        fieldUserIds.push(encrypt(jsonbody["EvidenceUserID"], currentLogCount));
+        fieldDocumentHashes.push(sha256(jsonbody["PdfDocumentBase64"]));
+        fieldCustomers.push(jsonbody["Customer"]);
+        fieldTimestamps.push(parseTimestamp(jsonbody["Timestamp"]));
+        fieldSigTypes.push(jsonbody["SigType"]);
+        currentLogCount += 1;
+
+
+        fields = [
+          fieldUserIds,
+          fieldDocumentHashes,
+          fieldCustomers,
+          fieldTimestamps,
+          fieldSigTypes,
+        ];
+        console.log("adding audit log")
+        console.log(fields)
+        const contractResponse = await lib.contr_addAuditLogs(
+          providerUrl,
+          contractAddress,
+          contractAbi,
+          fields //[["_userNameEncrypted"], ["_documentHash"], ["_customerName"], [_timeStamp], [_sigType]]
+        );
+
+        // remove all files from cache dir
+        await clearDirectory(process.env.CACHE_REQUESTS_DIRECTORY);
+
+        // write to success dir
+        for (const jsonData of storedJson) {
+          await writeFileToDirectory(
+            jsonData["file_name"],
+            JSON.stringify(jsonData["json"]),
+            process.env.SUCCESS_REQUESTS_DIRECTORY
+          );
+        }
+
+        json_response = {
+          status: 200,
+          message: "written all cached audit logs to blockchain."
+        };
+
+      } else {
+        // write to cache dir
+        file_name = `${Date.now()}-${jsonbody["Customer"]}.json`;
+        await writeFileToDirectory(
+          file_name,
+          JSON.stringify(jsonbody),
+          process.env.CACHE_REQUESTS_DIRECTORY
+        );
+
+        json_response = {
+          status: 200,
+          message: "cached audit logs, there are now " + (storedJson.length + 1) + " cached logs"
+        };
+
+      }
+    } catch (err) {
+      logWithTime(err);
+    }
   } else if (req.method === "POST" && req.url.endsWith("/create-audit-log")) {
     json_response = serverError();
     try {
@@ -144,13 +250,9 @@ async function resolveBody(req, body) {
       for (const auditLog of jsonbody["auditLogs"]) {
         if (
           jsonbody["EvidenceUserID"] === undefined ||
-          jsonbody["EvidenceUserID"] instanceof string === false ||
           jsonbody["PdfDocumentBase64"] === undefined ||
-          jsonbody["PdfDocumentBase64"] instanceof string === false ||
           jsonbody["Customer"] === undefined ||
-          jsonbody["Customer"] instanceof string === false ||
           jsonbody["Timestamp"] === undefined ||
-          jsonbody["Timestamp"] instanceof number === false ||
           jsonbody["SigType"] === undefined ||
           jsonbody["SigType"] < 0 ||
           jsonbody["SigType"] > 4
@@ -239,7 +341,7 @@ async function resolveBody(req, body) {
 
 async function retryFailedAuditLogs() {
   try {
-    const jsonData = await readJsonFiles();
+    const jsonData = await readJsonFiles(process.env.FAILED_REQUESTS_DIRECTORY);
     let currentLogCount = Number(
       await lib.contr_getAuditLogsCount(
         providerUrl,
@@ -268,13 +370,14 @@ async function retryFailedAuditLogs() {
     }
 
     // remove all files from failed dir
-    await clearDirectory();
+    await clearDirectory(process.env.FAILED_REQUESTS_DIRECTORY);
 
     // write to success dir
     for (const json of jsonData) {
       await writeFileToDirectory(
         json["file_name"],
-        JSON.stringify(json["json"])
+        JSON.stringify(json["json"]),
+        process.env.SUCCESS_REQUESTS_DIRECTORY
       );
     }
   } catch (error) {

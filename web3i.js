@@ -94,12 +94,12 @@ async function contr_addAuditLogs(providerUrl, contractAddr, abi, functionParams
 
     //We have to do a raw tx creation and broadcast because the dRPC provider doesn't support "eth_sendTransaction"
     //This unfortunately means you specify the function name as a string here
-    const functionAbi = env.abi.find(el => el.name === "createAuditLogs");
+    const functionAbi = env.abi.find(el => el.name === "batchCreateAuditLogs");
     const txdata = env.web3.eth.abi.encodeFunctionCall(functionAbi, functionParams);
 
     //Gas settings are done here -- gas limit should be adjusted based on which function is called
     //funtions with more complexity require a higher gas limit
-    const rawTransaction = await rawTxContractCall(env, txdata, 2000000)
+    const rawTransaction = await rawTxContractCall(env, txdata, 200000000)
     const txReceipt = await signAndBroadcast(env, rawTransaction)
 
     return txReceipt.transactionHash
